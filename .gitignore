@@ -2,3 +2,4 @@
 tensorflow.venv/
 *.keras
 *.pdf
+logs/
