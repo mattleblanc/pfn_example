@@ -41,4 +41,4 @@ for l in latent_sizes:
         run_script.write(cmd+'\n')
 
     print('sbatch batch/train_'+str(l)+'.sh')
-    #os.sytem('sbatch batch/train_'+str(l)+'.sh')
+    os.system('sbatch batch/train_'+str(l)+'.sh')

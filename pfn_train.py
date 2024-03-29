@@ -177,7 +177,7 @@ if(args.makeROCs):
     plt.rcParams['figure.autolayout'] = True
 
     # plot the ROC curves
-    plt.plot(pfn_tp, 1-pfn_fp, '-', color='black', label='PFN')
+    plt.plot(pfn_tp, 1-pfn_fp, '-', color='black', label='PFN (AUC: '+str(auc)+')')
     plt.plot(mass_tp, 1-mass_fp, '-', color='blue', label='Jet Mass')
     plt.plot(mult_tp, 1-mult_fp, '-', color='red', label='Multiplicity')
     

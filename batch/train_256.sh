@@ -6,7 +6,7 @@
 #SBATCH -t 4:00:00
 #SBATCH -p gpu --gres=gpu:1
 #SBATCH -o logs/slurm-%j.out
-#SBATCH -J PFN-qg-l256
+#SBATCH -J PFN-l256
 
 source tensorflow.venv/bin/activate
 
