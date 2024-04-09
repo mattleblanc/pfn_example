@@ -1,20 +1,16 @@
-"""         ____                
-    ____   / __/____            
-   / __ \ / /_ / __ \           
-  / /_/ // __// / / /           
- / .___//_/  /_/ /_/            
-/_/    __ _        __   _  __ __
-  ____/ /(_)_____ / /_ (_)/ // /
- / __  // // ___// __// // // / 
-/ /_/ // /(__  )/ /_ / // // /  
-\__,_//_//____/ \__//_//_//_/                                   
+"""    __                       
+  ____/ /____   ____                    _.-'`'-._
+ / __  // __ \ / __ \                .-'    _    '-.
+/ /_/ // / / // / / /                 `-.__  `\_.-'
+\__,_//_/ /_//_/ /_/_   _  __ __        |  `-``\|
+  ____/ /(_)_____ / /_ (_)/ // /        `-.....-#
+ / __  // // ___// __// // // /                 #
+/ /_/ // /(__  )/ /_ / // // /                  #
+\__,_//_//____/ \__//_//_//_/                                    
 """
 
 # This script written by Matt LeBlanc (Brown University, 2024),
 # adapted from pfn_example.py written by Patrick T. Komiske III and Eric Metodiev
-
-# EnergyFlow - Python package for high-energy particle physics.
-# Copyright (C) 2017-2020 Patrick T. Komiske III and Eric Metodiev
 
 # standard library imports
 from __future__ import absolute_import, division, print_function
@@ -27,6 +23,8 @@ import numpy as np
 # ML imports
 import tensorflow as tf
 import keras
+
+tf.experimental.numpy.experimental_enable_numpy_behavior()
 
 from tensorflow.data import Dataset
 from sklearn.metrics import roc_auc_score, roc_curve
@@ -54,7 +52,14 @@ class Distiller(tf.keras.Model):
         super().__init__()
         self.teacher = teacher
         self.student = student
-
+        self.loss_tracker = keras.metrics.Mean(name="distillation_loss")
+        
+    @property
+    def metrics(self):
+        metrics = super().metrics
+        metrics.append(self.loss_tracker)
+        return metrics
+    
     def compile(
         self,
         optimizer,
@@ -86,27 +91,49 @@ class Distiller(tf.keras.Model):
     def compute_loss(
         self, x=None, y=None, y_pred=None, sample_weight=None, allow_empty=False
     ):
-        
-        teacher_pred = self.teacher.model(x, training=False)
+        # Forward pass of teacher
+        teacher_predictions = self.teacher.model(x, training=False)
         student_loss = self.student_loss_fn(y, y_pred)
         
-        distillation_loss = self.distillation_loss_fn(
-            tf.nn.softmax(teacher_pred / self.temperature, axis=1),
-            tf.nn.softmax(y_pred / self.temperature, axis=1),            
-        ) * (self.temperature**2)
-        #distillation_loss = self.distillation_loss_fn( teacher_pred, y_pred )
+        with tf.GradientTape() as tape:
+            # Forward pass of student
+            student_predictions = self.student.model(x.reshape(-1,X_train.shape[1]*X_train.shape[2]),
+                                                     training=True)
 
-        #loss = self.alpha * student_loss + (1 - self.alpha) * distillation_loss
-        loss = distillation_loss
+            # Compute loss
+            distillation_loss = self.distillation_loss_fn(
+                tf.nn.softmax(teacher_predictions / self.temperature, axis=1),
+                tf.nn.softmax(student_predictions / self.temperature, axis=1),
+            )
 
-        return loss
+        """
+        # MLB Note: This kind of combined-loss seems to break things at the moment...
+        # just using distillation loss for now, but it works well!
+            
+        #student_loss  = self.student_loss_fn(y, y_pred) # Also compute the loss of training the student directly
+        
+        # alpha determines how much the student listens to the teacher or trusts itself
+        #combined_loss = self.alpha * student_loss + (1 - self.alpha) * distillation_loss
+        """        
+
+        # Compute gradients
+        trainable_vars = self.student.trainable_variables
+        #gradients = tape.gradient(combined_loss, trainable_vars)
+        gradients = tape.gradient(distillation_loss, trainable_vars)
+        
+        # Update weights
+        self.optimizer.apply_gradients(zip(gradients, trainable_vars))
+
+        # Report progress
+        #self.loss_tracker.update_state(combined_loss)
+        self.loss_tracker.update_state(distillation_loss)
+        return {"distillation_loss": self.loss_tracker.result()} 
+        #return loss
 
     def call(self, x):
-        tf.experimental.numpy.experimental_enable_numpy_behavior()
         return self.student.model(x.reshape(-1,X_train.shape[1]*X_train.shape[2]))
-        #return self.student(x)
-        #return self.student.model(x) # needed for EFN/PFN
 
+    
 ###########
 # Main script
 
@@ -146,16 +173,14 @@ print("pfn_example.py\tWelcome!")
 ###############################################################################
 
 # data controls, can go up to 2000000 for full dataset
-#train, val, test = 75000, 10000, 15000
-#train, val, test = 150000, 20000, 30000
-train, val, test = 1500000, 250000, 250000
+#train, val, test = 75000, 10000, 15000 # small
+#train, val, test = 150000, 20000, 30000 # medium (2x small, ~0.1x complete)
+train, val, test = 1500000, 250000, 250000 # complete
 use_pids = args.usePIDs
 
 # network architecture parameters
-Phi_sizes_teacher, F_sizes_teacher = (100, 100, args.latentSize), (100, 100, 100)
-Phi_sizes_student, F_sizes_student = (100, 100, args.latentSize/8), (100, 100, 100)
-Phi_sizes_simple, F_sizes_simple   = (100, 100, args.latentSize/8), (100, 100, 100)
-# Phi_sizes, F_sizes = (100, 100, 256), (100, 100, 100)
+#Phi_sizes_teacher, F_sizes_teacher = (100, 100, args.latentSize), (100, 100, 100)
+Phi_sizes_teacher, F_sizes_teacher = (250, 250, args.latentSize), (250, 250, 250) # could try bigger?
 
 # network training parameters
 num_epoch = args.nEpochs
@@ -201,15 +226,12 @@ print('Model summary:')
 
 # build architecture
 pfn_teacher = PFN(input_dim=X.shape[-1], Phi_sizes=Phi_sizes_teacher, F_sizes=F_sizes_teacher)
-#pfn_student = PFN(input_dim=X.shape[-1], Phi_sizes=Phi_sizes_student, F_sizes=F_sizes_student)
-#pfn_simple = PFN(input_dim=X.shape[-1], Phi_sizes=Phi_sizes_simple, F_sizes=F_sizes_simple)
 
 # train the teacher model
-
 if(args.doEarlyStopping):
     from keras.callbacks import EarlyStopping,ModelCheckpoint
     es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=args.patience)
-    mc = ModelCheckpoint('best_pfn_'+args.label+'.keras', monitor='val_acc', mode='max', verbose=1, save_best_only=True)
+    mc = ModelCheckpoint('best_pfn_'+args.label+'_teacher.keras', monitor='val_acc', mode='max', verbose=1, save_best_only=True)
 
     print("Training teacher:")
     pfn_teacher.fit(X_train, Y_train,
@@ -218,14 +240,6 @@ if(args.doEarlyStopping):
                     validation_data=(X_val, Y_val),
                     verbose=1,
                     callbacks=[es,mc])
-    
-    #print("Training simple:")
-    #pfn_simple.fit(X_train, Y_train,
-    #               epochs=num_epoch,
-    #               batch_size=batch_size,
-    #               validation_data=(X_val, Y_val),
-    #               verbose=1,
-    #               callbacks=[es,mc])
 
 else:
     print("Training teacher:")
@@ -234,13 +248,6 @@ else:
                     batch_size=batch_size,
                     validation_data=(X_val, Y_val),
                     verbose=1)
-
-    #print("Training simple:")
-    #pfn_simple.fit(X_train, Y_train,
-    #               epochs=num_epoch,
-    #               batch_size=batch_size,
-    #               validation_data=(X_val, Y_val),
-    #               verbose=1)
 
 ############################################
 
@@ -256,83 +263,68 @@ dense_sizes = (100, 100)
 dnn_simple  = DNN(input_dim=X_train.shape[1]*X_train.shape[2], dense_sizes=dense_sizes)
 dnn_student = DNN(input_dim=X_train.shape[1]*X_train.shape[2], dense_sizes=dense_sizes)
 
-# train model
-dnn_simple.fit(X_train.reshape(-1,X_train.shape[1]*X_train.shape[2]), Y_train,
-               epochs=num_epoch,
-               batch_size=batch_size,
-               validation_data=(X_val.reshape(-1,X_val.shape[1]*X_val.shape[2]), Y_val),
-               verbose=1)
-
-############################################
-
-# Train the 'simple' model for comparison later
-
-"""
+# train the simple model
 if(args.doEarlyStopping):
-    from keras.callbacks import EarlyStopping,ModelCheckpoint
     es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=args.patience)
-    mc = ModelCheckpoint('best_pfn_'+args.label+'.keras', monitor='val_acc', mode='max', verbose=1, save_best_only=True)
-    
-    print("Training simple:")
-    dnn_simple.fit(X_train, Y_train_for_distiller,
+    mc = ModelCheckpoint('best_dnn_'+args.label+'_simple.keras', monitor='val_acc', mode='max', verbose=1, save_best_only=True)
+    dnn_simple.fit(X_train.reshape(-1,X_train.shape[1]*X_train.shape[2]), Y_train,
                    epochs=num_epoch,
                    batch_size=batch_size,
-                   validation_data=(X_val, Y_val_for_distiller),
+                   validation_data=(X_val.reshape(-1,X_val.shape[1]*X_val.shape[2]), Y_val),
                    verbose=1,
                    callbacks=[es,mc])
-
 else:
-    print("Training simple:")
-    dnn_simple.fit(X_train, Y_train_for_distiller,
+    dnn_simple.fit(X_train.reshape(-1,X_train.shape[1]*X_train.shape[2]), Y_train,
                    epochs=num_epoch,
                    batch_size=batch_size,
-                   validation_data=(X_val, Y_val_for_distiller),
+                   validation_data=(X_val.reshape(-1,X_val.shape[1]*X_val.shape[2]), Y_val),
                    verbose=1)
-"""
 
 ############################################
-    
+
 # train the student model
 
 distiller = Distiller(student=dnn_student, teacher=pfn_teacher)
 
 distiller.compile(
     optimizer=tf.keras.optimizers.Adam(),
-    #metrics=[tf.keras.metrics.SparseCategoricalAccuracy()],
-    #student_loss_fn=tf.keras.losses.SparseCategoricalCrossentropy(),#from_logits=True),
     metrics=[tf.keras.metrics.CategoricalCrossentropy()],
     student_loss_fn=tf.keras.losses.CategoricalCrossentropy(),
     distillation_loss_fn=tf.keras.losses.KLDivergence(),
-    alpha=1.0, # was 0.1
+    alpha=0.5, # was 0.1 but doesn't do anything right now
     temperature=3.0,
 )
 
-# Distiller loss functions do *not* want one-hot encoding ...
-#Y_train_for_distiller = np.asarray([row[0] for row in Y_train])
-#Y_val_for_distiller = np.asarray([row[0] for row in Y_val])
+### MLB NOTE: Early stopping is not working yet for custom subclassed model ...
+#   need to write custom callback function at some point, I think
 
 # Distill teacher to student
-if(args.doEarlyStopping):
-    #from keras.callbacks import EarlyStopping,ModelCheckpoint
-    es_d = EarlyStopping(monitor='val_categorical_crossentropy', mode='min', verbose=1, patience=args.patience)
-    mc_d = ModelCheckpoint('best_pfn_'+args.label+'.keras', monitor='val_categorical_crossentropy', mode='max', verbose=1, save_best_only=True)
-
-    print("Training student:")
-    distiller.fit(X_train,
-                  Y_train,#_for_distiller,
-                  epochs=num_epoch,
-                  batch_size=batch_size,
-                  validation_data=(X_val, Y_val),#_for_distiller),
-                  verbose=1,
-                  callbacks=[es_d,mc_d])
-else:
-    print("Training student:")
-    distiller.fit(X_train,
-                  Y_train,#,_for_distiller,
-                  epochs=num_epoch,
-                  batch_size=batch_size,
-                  validation_data=(X_val, Y_val),#_for_distiller),
-                  verbose=1)
+#if(args.doEarlyStopping):
+    #es_d = EarlyStopping(monitor='val_distillation_loss', mode='min', verbose=1, patience=args.patience)
+    #mc_d = ModelCheckpoint('best_dnn_'+args.label+'_student.keras',
+    #                       monitor='val_categorical_crossentropy',
+    #                       mode='auto',
+    #                       verbose=1,
+    #                       save_best_only=True,
+    #                       save_format="tf")
+    
+    #print("Training student:")
+    #hist = distiller.fit(X_train,
+    #              Y_train,#_for_distiller,
+    #              epochs=num_epoch,
+    #              batch_size=batch_size,
+    #              validation_data=(X_val, Y_val),#_for_distiller),
+    #              verbose=1,
+    #              callbacks=[es_d])#,mc_d])
+    
+#else:
+print("Training student:")
+distiller.fit(X_train,
+              Y_train,#,_for_distiller,
+              epochs=20, #num_epoch,
+              batch_size=batch_size,
+              validation_data=(X_val, Y_val),#_for_distiller),
+              verbose=1)
 #########################################################################
 
     
