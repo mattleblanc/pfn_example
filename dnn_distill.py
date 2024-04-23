@@ -175,12 +175,14 @@ print("pfn_example.py\tWelcome!")
 # data controls, can go up to 2000000 for full dataset
 #train, val, test = 75000, 10000, 15000 # small
 #train, val, test = 150000, 20000, 30000 # medium (2x small, ~0.1x complete)
-train, val, test = 1500000, 250000, 250000 # complete
+#train, val, test = 1500000, 250000, 250000 # complete
+frac_train, frac_val, frac_test = 0.75, 0.125, 0.125
+train, val, test = int(frac_train*1500000), int(frac_val*1500000), int(frac_test*1500000) # Only 1500000 jets in the H7 sample
 use_pids = args.usePIDs
 
 # network architecture parameters
-#Phi_sizes_teacher, F_sizes_teacher = (100, 100, args.latentSize), (100, 100, 100)
-Phi_sizes_teacher, F_sizes_teacher = (250, 250, args.latentSize), (250, 250, 250) # could try bigger?
+Phi_sizes_teacher, F_sizes_teacher = (100, 100, args.latentSize), (100, 100, 100)
+#Phi_sizes_teacher, F_sizes_teacher = (250, 250, args.latentSize), (250, 250, 250) # could try bigger?
 
 # network training parameters
 num_epoch = args.nEpochs
@@ -193,9 +195,18 @@ batch_size = args.batchSize
 print('Loading the dataset ...')
 
 # load data
-X, y = qg_jets.load(train + val + test)
+X, y = qg_jets.load(train + val + test, generator='pythia', pad=True)
+#X, y = qg_jets.load(train + val + test, generator='herwig', pad=True)
 
 print('Dataset loaded!')
+
+"""
+The padded Pythia and Herwig datasets are different shapes:
+   Pythia: (2000000, 148, 4)
+   Herwig: (1500000, 154, 4)
+ So, if you want to do comparative studies, you need to pad the Pythia one by six entries along the second axis.
+"""
+X = np.lib.pad(X, ((0,0), (0,6), (0,0)), mode='constant', constant_values=0)
 
 # convert labels to categorical
 Y = to_categorical(y, num_classes=2)
@@ -214,8 +225,11 @@ if use_pids:
     remap_pids(X, pid_i=3)
 else:
     X = X[:,:,:3]
-
+    
 print('Finished preprocessing')
+
+#print(X.shape)
+#print(X[0])
 
 # do train/val/test split 
 (X_train, X_val, X_test,
