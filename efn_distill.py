@@ -121,7 +121,7 @@ class Distiller(tf.keras.Model):
         with tf.GradientTape() as tape:
             # Forward pass of student
             #student_predictions = self.student.model([z,p], training=True)
-            student_predictions = self.student.model(x, training=True)
+            student_predictions = self.student(x, training=True)
 
             # Compute loss
             distillation_loss = self.distillation_loss_fn(
@@ -154,10 +154,7 @@ class Distiller(tf.keras.Model):
         #return loss
 
     def call(self, x):
-        # For EFN
-        z = x[:,:,0]
-        p = x[:,:,1:]
-        return self.student.model([z,p])
+        return self.student(x)
 
     
 ###########
@@ -225,6 +222,7 @@ X, y = qg_jets.load(train + val + test, generator='pythia', pad=True)
 #X, y = qg_jets.load(train + val + test, generator='herwig', pad=True)
 
 print('Dataset loaded!')
+print(X.shape)
 
 """
 The padded Pythia and Herwig datasets are different shapes:
@@ -315,29 +313,32 @@ else:
 
 # build architecture, input_dim=2 (y,phi) for EFN
 
-efn_student = EFN(input_dim=2, Phi_sizes=Phi_sizes, F_sizes=F_sizes)
-efn_simple  = EFN(input_dim=2, Phi_sizes=Phi_sizes, F_sizes=F_sizes)
+_efn_student = EFN(input_dim=2, Phi_sizes=Phi_sizes, F_sizes=F_sizes).model
+_efn_simple  = EFN(input_dim=2, Phi_sizes=Phi_sizes, F_sizes=F_sizes).model
 
-#efn_student = efn_input_converter(_efn_student)
-#efn_student.compile()
-#efn_simple = efn_input_converter(_efn_simple)
-#efn_simple.compile()
+max_particles=X.shape[1]
+efn_student = efn_input_converter(_efn_student,shape=(max_particles, 3))
+efn_student.compile(loss="binary_crossentropy",
+                    optimizer=tf.keras.optimizers.Adam())
+efn_simple = efn_input_converter(_efn_simple,shape=(max_particles, 3))
+efn_simple.compile(loss="binary_crossentropy",
+                    optimizer=tf.keras.optimizers.Adam())
 
 # train the simple model
 if(args.doEarlyStopping):
     es = EarlyStopping(monitor='val_loss', mode='min', verbose=1, patience=args.patience)
     mc = ModelCheckpoint('best_dnn_'+args.label+'_simple.keras', monitor='val_acc', mode='max', verbose=1, save_best_only=True)
-    efn_simple.fit([z_train, p_train], Y_train,
+    efn_simple.fit(X_train, Y_train,
                    epochs=num_epoch,
                    batch_size=batch_size,
-                   validation_data=([z_val,p_val], Y_val),
+                   validation_data=(X_val, Y_val),
                    verbose=1,
                    callbacks=[es,mc])
 else:
-    efn_simple.fit([z_train, p_train], Y_train,
+    efn_simple.fit(X_train, Y_train,
                    epochs=num_epoch,
                    batch_size=batch_size,
-                   validation_data=([z_val,p_val], Y_val),
+                   validation_data=(X_val, Y_val),
                    verbose=1)
     
 ############################################
@@ -397,7 +398,7 @@ print('Teacher PFN AUC:', auc_teacher)
 print()
 
 # get predictions on test data and ROC curve
-preds_student = efn_student.predict([z_test, p_test],
+preds_student = efn_student.predict(X_test,
                                     batch_size=1000)
 dnn_fp_student, dnn_tp_student, threshs_student = roc_curve(Y_test[:,1], preds_student[:,1])
 auc_student  = roc_auc_score(Y_test[:,1], preds_student[:,1])
@@ -406,7 +407,7 @@ print('Student PFN AUC:', auc_student)
 print()
 
 # get predictions on test data and ROC curve
-preds_simple = efn_simple.predict([z_test, p_test],
+preds_simple = efn_simple.predict(X_test,
                                   batch_size=1000)
 dnn_fp_simple, dnn_tp_simple, threshs_simple = roc_curve(Y_test[:,1], preds_simple[:,1])
 auc_simple  = roc_auc_score(Y_test[:,1], preds_simple[:,1])
