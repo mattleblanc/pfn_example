@@ -111,17 +111,20 @@ class Distiller(tf.keras.Model):
         self.alpha = alpha
         self.temperature = temperature
 
-    def compute_loss(
+    #def compute_loss(
+    def train_step(
             self, x=None, y=None, y_pred=None, sample_weight=None, allow_empty=False
     ):
+        # n.b. in train_step x is a tuple of the information in X & y 
+        
         # Forward pass of teacher
-        teacher_predictions = self.teacher.model(x, training=False)
-        student_loss = self.student_loss_fn(y, y_pred)
+        teacher_predictions = self.teacher.model(x[0], training=False)
+        #student_loss = self.student_loss_fn(x[1], y_pred)
         
         with tf.GradientTape() as tape:
             # Forward pass of student
             #student_predictions = self.student.model([z,p], training=True)
-            student_predictions = self.student(x, training=True)
+            student_predictions = self.student(x[0], training=True)
 
             # Compute loss
             distillation_loss = self.distillation_loss_fn(
@@ -165,7 +168,9 @@ parser.add_argument("--nEpochs", dest='nEpochs', default=0, type=int, required=F
                     help="How many epochs to train for?")
 parser.add_argument("--batchSize", dest='batchSize', default=500, type=int, required=False,
                     help="How large should the batch size be?")
-parser.add_argument("--latentSize", dest='latentSize', default=128, type=int, required=False,
+parser.add_argument("--latentSizeTeacher", dest='latentSizeTeacher', default=128, type=int, required=False,
+                    help="What is the dimension of the per-particle embedding? n.b. must be a power of 2!")
+parser.add_argument("--latentSizeStudent", dest='latentSizeStudent', default=128, type=int, required=False,
                     help="What is the dimension of the per-particle embedding? n.b. must be a power of 2!")
 parser.add_argument("--doEarlyStopping", dest='doEarlyStopping', action='store_true', required=False,
                     help="Do early stopping?")
@@ -183,7 +188,10 @@ if(args.nEpochs==0 and args.doEarlyStopping==False):
     raise Exception("You need to specify a number of epochs to train for, or to use early stopping!")
 
 # nice : https://stackoverflow.com/questions/57025836/how-to-check-if-a-given-number-is-a-power-of-two
-if( not(args.latentSize & (args.latentSize-1))==0 and args.latentSize!=0):
+if( not(args.latentSizeTeacher & (args.latentSizeTeacher-1))==0 and args.latentSizeTeacher!=0):
+    raise Exception("The dimension of the per-particle embedding has to be a power of 2!")
+
+if( not(args.latentSizeStudent & (args.latentSizeStudent-1))==0 and args.latentSizeStudent!=0):
     raise Exception("The dimension of the per-particle embedding has to be a power of 2!")
 
 if(args.nEpochs>0 and args.doEarlyStopping):
@@ -200,12 +208,17 @@ print("pfn_example.py\tWelcome!")
 #train, val, test = 150000, 20000, 30000 # medium (2x small, ~0.1x complete)
 #train, val, test = 1500000, 250000, 250000 # complete
 frac_train, frac_val, frac_test = 0.75, 0.125, 0.125
+train, val, test = int(frac_train*2000000), int(frac_val*2000000), int(frac_test*2000000)
 #train, val, test = int(frac_train*1500000), int(frac_val*1500000), int(frac_test*1500000) # Only 1500000 jets in the H7 sample
-train, val, test = int(frac_train*150000), int(frac_val*150000), int(frac_test*100000) # Using 10%
+#train, val, test = int(frac_train*150000), int(frac_val*150000), int(frac_test*100000) # Using 10%
 use_pids = args.usePIDs
 
 # network architecture parameters
-Phi_sizes, F_sizes = (100, 100, args.latentSize), (100, 100, 100)
+Phi_sizes_teacher, F_sizes_teacher = (100, 100, args.latentSizeTeacher), (100, 100, 100)
+Phi_sizes_teacher, F_sizes_teacher = (100, 100, args.latentSizeTeacher), (100, 100, 100)
+
+Phi_sizes_student, F_sizes_student = (100, 100, args.latentSizeStudent), (100, 100, 100)
+Phi_sizes_student, F_sizes_student = (100, 100, args.latentSizeStudent), (100, 100, 100)
 
 # network training parameters
 num_epoch = args.nEpochs
@@ -283,7 +296,7 @@ print('Done train/val/test split')
 print('Model summary:')
 
 # build architecture
-pfn_teacher = PFN(input_dim=X.shape[-1], Phi_sizes=Phi_sizes, F_sizes=F_sizes)
+pfn_teacher = PFN(input_dim=X.shape[-1], Phi_sizes=Phi_sizes_teacher, F_sizes=F_sizes_teacher)
 
 # train the teacher model
 if(args.doEarlyStopping):
@@ -313,16 +326,20 @@ else:
 
 # build architecture, input_dim=2 (y,phi) for EFN
 
-_efn_student = EFN(input_dim=2, Phi_sizes=Phi_sizes, F_sizes=F_sizes).model
-_efn_simple  = EFN(input_dim=2, Phi_sizes=Phi_sizes, F_sizes=F_sizes).model
+_efn_student = EFN(input_dim=2, Phi_sizes=Phi_sizes_student, F_sizes=F_sizes_student).model
+_efn_simple  = EFN(input_dim=2, Phi_sizes=Phi_sizes_student, F_sizes=F_sizes_student).model
 
 max_particles=X.shape[1]
 efn_student = efn_input_converter(_efn_student,shape=(max_particles, 3))
 efn_student.compile(loss="binary_crossentropy",
-                    optimizer=tf.keras.optimizers.Adam())
+                    optimizer=tf.keras.optimizers.Adam(),
+                    #metrics=["val_acc"]
+                    )
 efn_simple = efn_input_converter(_efn_simple,shape=(max_particles, 3))
 efn_simple.compile(loss="binary_crossentropy",
-                    optimizer=tf.keras.optimizers.Adam())
+                   optimizer=tf.keras.optimizers.Adam(),
+                   #metrics=["val_acc"]
+                   )
 
 # train the simple model
 if(args.doEarlyStopping):
@@ -403,7 +420,7 @@ preds_student = efn_student.predict(X_test,
 dnn_fp_student, dnn_tp_student, threshs_student = roc_curve(Y_test[:,1], preds_student[:,1])
 auc_student  = roc_auc_score(Y_test[:,1], preds_student[:,1])
 print()
-print('Student PFN AUC:', auc_student)
+print('Student EFN AUC:', auc_student)
 print()
 
 # get predictions on test data and ROC curve
@@ -412,7 +429,7 @@ preds_simple = efn_simple.predict(X_test,
 dnn_fp_simple, dnn_tp_simple, threshs_simple = roc_curve(Y_test[:,1], preds_simple[:,1])
 auc_simple  = roc_auc_score(Y_test[:,1], preds_simple[:,1])
 print()
-print('Simple PFN AUC:', auc_simple)
+print('Simple EFN AUC:', auc_simple)
 print()
 
 if(args.makeROCs):
