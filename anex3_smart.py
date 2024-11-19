@@ -102,7 +102,7 @@ keyframes = [events.particles[14930][:,:3],
 
 ## center the jets by y, phi (elements 1-2 in particles list)
 for event in keyframes:
-    event[:,1:3] -= np.average(event[:,1:3], weights=event[:,0])
+    event[:,1:3] -= np.average(event[:,1:3], weights=event[:,0], axis=0) 
 
 # mask out particles outside of the cone
 # event0 = event0[np.linalg.norm(event0[:,1:3], axis=1) < R]
@@ -113,8 +113,12 @@ for event in keyframes:
 for event in keyframes:
     event = event[np.linalg.norm(event[:,1:3], axis=1) < R]
 
-## copy events list to a numpy array
-kfs = np.copy(keyframes)
+# print(keyframes)
+## copy events list to a numpy 
+kfs = []
+for ev in keyframes:
+    kfs.append(np.copy(ev))
+
 
 #############################################################
 # MAKE ANIMATION
@@ -127,21 +131,22 @@ fig, ax = plt.subplots()
 # merged2 = merge(ev2, ev0, lamb=0, R=R)
 
 ## find merge arrays for all event pairs, including one for a clean loop (last->first event merge)
-merges = np.zeros(kfs.size)
-for i in range(0, kfs.size - 1):
-    if i < (kfs.size - 1):
+# merges = list(len(kfs))
+merges = []
+for i in range(0, len(kfs) - 1):
+    if i < (len(kfs) - 1):
         ev0 = kfs[i]
         ev1 = kfs[i+1]
-        merges[i] = merge(ev0, ev1, lamb=0, R=R)
-    elif i == (kfs.size - 1):
+        merges.append(merge(ev0, ev1, lamb=0, R=R))
+    elif i == (len(kfs) - 1):
         ev0 = kfs[i]
         ev1 = kfs[0]
-        merges[i] = merge(ev0, ev1, lamb=0, R=R)
+        merges.append(merge(ev0, ev1, lamb=0, R=R))
     else:
         raise Exception("You don't need to animate something with less than 2 frames...")
     
 ## sanity check - delete later
-print(kfs)
+# print(kfs)
 
 ## assign initial pts, ys, phis based on first keyframe
 pts0, ys0, phis0 = merges[0][:,0], merges[0][:,1], merges[0][:,2]
@@ -165,13 +170,14 @@ def smart_animate(i):
     ax.clear()
 
     # need 2 times the number of keyframes for transition stages
-    nstages = 2 * kfs.size
+    nstages = 2 * len(kfs)
 
     # stage number based on frames
     stage_size = nframes / nstages
 
     # current keyframe number
-    current_kf = np.floor(current_phase/2)
+    global current_phase
+    current_kf = int(np.floor(current_phase/2))
 
     # assuming i starts indexing at 0,
     lamb = (nstages*(current_phase * stage_size)) / (nframes-1)
@@ -223,7 +229,7 @@ def smart_animate(i):
     return scatter,
 
 anim = animation.FuncAnimation(fig, smart_animate, frames=nframes, repeat=True)
-anim.save('smartenergyflowanimation.gif', fps=fps, dpi=200)
+anim.save('smartanimation.gif', fps=fps, dpi=200)
 
 # uncomment these lines if running in a jupyter notebook
 # from IPython.display import HTML
