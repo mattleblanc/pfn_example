@@ -164,7 +164,7 @@ def animate(i):
         lamb = nstages*(i - 5*nframes/nstages)/(nframes-1)
         ev0  = event0
         ev1  = event2
-        color = (lamb)*np.asarray([0,1,0]) + (1-lamb)*np.asarray([0,0,1])
+        color = (1-lamb)*np.asarray([0,1,0]) + (lamb)*np.asarray([1,0,0])
 
 
     merged = merge(ev0, ev1, lamb=lamb, R=0.5)
