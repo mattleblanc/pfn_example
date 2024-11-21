@@ -3,7 +3,7 @@ that `ffmpeg` must be installed in order for matplotlib to be able to render
 the animation. Strange errors may result if there are issues with required
 software components.
 
-This version attempts to implement a generalized function for the animation.
+This version attempts to implement an even more generalized function for the animation, which would work for any array of jet events passed through.
 """
 
 #           _   _ _____ __  __       _______ _____ ____  _   _
@@ -86,71 +86,54 @@ events = ef.mod.load(*specs, dataset='cms', amount=0.01)
 
 ## list of events to be displayed initialized here, in order of display in the animation
 # particle [pT,y,phi]
-keyframes = [events.particles[14930][:,:3], 
+keyframes3 = [events.particles[14930][:,:3], 
           events.particles[19751][:,:3],
           events.particles[12345][:,:3]]
+
+keyframes7 = [events.particles[14930][:,:3], 
+          events.particles[19751][:,:3],
+          events.particles[12345][:,:3],
+          events.particles[45465][:,:3],
+          events.particles[19816][:,:3],
+          events.particles[21984][:,:3],
+          events.particles[12123][:,:3]]
 
 # center the jets
 # event0[:,1:3] -= np.average(event0[:,1:3], weights=event0[:,0], axis=0)
 # event1[:,1:3] -= np.average(event1[:,1:3], weights=event1[:,0], axis=0)
 # event2[:,1:3] -= np.average(event2[:,1:3], weights=event2[:,0], axis=0)
 
-## center the jets by y, phi (elements 1-2 in particles list)
-for event in keyframes:
-    event[:,1:3] -= np.average(event[:,1:3], weights=event[:,0], axis=0) 
-
-# mask out particles outside of the cone
-# event0 = event0[np.linalg.norm(event0[:,1:3], axis=1) < R]
-# event1 = event1[np.linalg.norm(event1[:,1:3], axis=1) < R]
-# event2 = event2[np.linalg.norm(event2[:,1:3], axis=1) < R]
-
-## mask out particles outside of the cone (radius R)
-for event in keyframes:
-    event = event[np.linalg.norm(event[:,1:3], axis=1) < R]
-
-# print(keyframes)
-## copy events list to a numpy 
+## prepare the jets for any amount of events
 kfs = []
-for ev in keyframes:
-    kfs.append(np.copy(ev))
+def prepare_events(keyframes):
+    ## center the jets by y, phi (elements 1-2 in particles list)
+    for event in keyframes:
+        event[:,1:3] -= np.average(event[:,1:3], weights=event[:,0], axis=0) 
 
+    ## mask out particles outside of the cone (radius R)
+    for event in keyframes:
+        event = event[np.linalg.norm(event[:,1:3], axis=1) < R]
+
+    ## copy events list to a numpy 
+    global kfs
+    for ev in keyframes:
+        kfs.append(np.copy(ev))
+
+# remove this next line once I figure out what's going on
+prepare_events(keyframes7)
+
+print(kfs)
 
 #############################################################
 # MAKE ANIMATION
 #############################################################
 
 fig, ax = plt.subplots()
-
-# merged0 = merge(ev0, ev1, lamb=0, R=R)
-# merged1 = merge(ev1, ev2, lamb=0, R=R)
-# merged2 = merge(ev2, ev0, lamb=0, R=R)
-
-## find merge arrays for all event pairs, including one for a clean loop (last->first event merge)
-# merges = list(len(kfs))
-# merges = []
-# for i in range(0, len(kfs) - 1):
-#     if i < (len(kfs) - 1):
-#         ev0 = kfs[i]
-#         ev1 = kfs[i+1]
-#         merges.append(merge(ev0, ev1, lamb=0, R=R))
-#     elif i == (len(kfs) - 1):
-#         ev0 = kfs[i]
-#         ev1 = kfs[0]
-#         merges.append(merge(ev0, ev1, lamb=0, R=R))
-#     else:
-#         raise Exception("You don't need to animate something with less than 2 frames...")
     
 merged = merge(kfs[0], kfs[1], lamb=0, R=R)
-## sanity check - delete later
-# print(kfs)
 
 ## assign initial pts, ys, phis based on first keyframe
-# pts0, ys0, phis0 = merges[0][:,0], merges[0][:,1], merges[0][:,2]
 pts0, ys0, phis0 = merged[:,0], merged[:,1], merged[:,2]
-
-# pts0, ys0, phis0 = merged0[:,0], merged0[:,1], merged0[:,2]
-# pts1, ys1, phis1 = merged1[:,0], merged1[:,1], merged1[:,2]
-# pts2, ys2, phis2 = merged2[:,0], merged2[:,1], merged2[:,2]
 
 ## initialize scatterplot with first keyframe
 scatter = ax.scatter(ys0, phis0, color='blue', s=pts0, lw=0)
@@ -160,11 +143,13 @@ current_phase = 0
 
 ## smart animate function, which is called sequentially
 def smart_animate(i):
-    # events list is currently hardcoded in, but might need to add a param to smart_animate that takes the list
-    # also need to make the animation go like /\ as original did instead of like D (12321 instead of 1231)
-    
+    # still might want to add another parameter?
+
     # clear ax before each frame drawing
     ax.clear()
+
+    # call prepare_events on the keyframes list
+    # prepare_events(keyframes)
 
     # need 2 times the number of keyframes for transition stages
     nstages = 2 * len(kfs)
@@ -175,7 +160,6 @@ def smart_animate(i):
     # current keyframe number
     global current_phase
     current_kf = int(np.floor(current_phase/2))
-    # print(stage_size)
 
     # assuming i starts indexing at 0,
     lamb = (nstages*(i - (current_phase * stage_size))) / (nframes-1)
@@ -202,10 +186,6 @@ def smart_animate(i):
 
     # set modulo to recognize when the phase ends
     if ((i+1) % stage_size) < 1: # not == due to non-integer stage_size
-        # if i == (nframes - 1):
-        #     print('last frame!')
-        #     current_phase = 0
-        # else:
         current_phase += 1
     
     color = 'blue' # change this later
@@ -221,7 +201,7 @@ def smart_animate(i):
     return scatter,
 
 anim = animation.FuncAnimation(fig, smart_animate, frames=nframes, repeat=True)
-anim.save('smartanimation.gif', fps=fps, dpi=200)
+anim.save('smartanimationgen.gif', fps=fps, dpi=200)
 
 # uncomment these lines if running in a jupyter notebook
 # from IPython.display import HTML
