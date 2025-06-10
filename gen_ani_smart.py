@@ -166,13 +166,13 @@ def smart_animate(i):
 
     # even phases are the static images of keyframes
     if (current_phase % 2) == 0:
-        print('even phase')
+        # print('even phase')
         ev0 = kfs[current_kf]
         ev1 = kfs[current_kf]
 
     # odd phases are transitions between keyframes
     elif (current_phase % 2) == 1:
-        print('odd phase')
+        # print('odd phase')
         if current_phase == (nstages - 1):
             ev0 = kfs[0]
             ev1 = kfs[current_kf]
@@ -180,9 +180,9 @@ def smart_animate(i):
             ev0 = kfs[current_kf + 1]
             ev1 = kfs[current_kf]
 
-    print('phase',current_phase)
-    print('keyframe',current_kf)
-    print('frame',i)
+    # print('phase',current_phase)
+    # print('keyframe',current_kf)
+    # print('frame',i)
 
     # set modulo to recognize when the phase ends
     if ((i+1) % stage_size) < 1: # not == due to non-integer stage_size
