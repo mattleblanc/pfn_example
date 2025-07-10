@@ -340,7 +340,7 @@ for j in range(0,len(kt_jets[0].constituents())):
         constituents = kt_jets[0].constituents()
 
         kt_xsubjs = kt_cluster.exclusive_subjets_up_to(kt_jets[0], j)
-        print([[xsj.rap(), xsj.phi(), xsj.perp()] for xsj in kt_xsubjs])
+        # print([[xsj.rap(), xsj.phi(), xsj.perp()] for xsj in kt_xsubjs])
 
         avg_rap = sum([c.rap() for c in constituents]) / len(constituents)
         avg_phi = sum([c.phi() for c in constituents]) / len(constituents)
@@ -356,7 +356,7 @@ for j in range(0,len(kt_jets[0].constituents())):
 
 
 # kfs = kt_xsubjs
-nframes = len(kt_jets[0].constituents())
+nframes = len(kt_jets[0].constituents()) - 1
 
 
 def not_so_smart_animate(i):
@@ -391,18 +391,20 @@ def not_so_smart_animate(i):
     # merged = merge(ev0, ev1, lamb=lamb, R=0.5)
     # pts, ys, phis = merged[:,0], merged[:,1], merged[:,2]
     # scatter = ax.scatter(ys, phis, color=color, s=zf*pts, lw=0)
-    scatter = ax.scatter([xsj.rap()-avg_rap for xsj in kt_xsubjs],
-                     [xsj.phi()-avg_phi for xsj in kt_xsubjs],
-                     s=[xsj.perp()*zf for xsj in kt_xsubjs],
+    kt_xsubjs = kt_cluster.exclusive_subjets_up_to(kt_jets[0], j)
+
+    scatter = ax.scatter([kt_xsubjs[i].rap()-avg_rap],
+                     [kt_xsubjs[i].phi()-avg_phi],
+                     s=[kt_xsubjs[i].perp()*zf],
                      color='purple')
 
-    ax.set_xlim(-R, R); ax.set_ylim(-R, R);
+    ax.set_xlim(-5, 5); ax.set_ylim(-5, 5);
     ax.set_axis_off()
 
     return scatter,
 
 anim = animation.FuncAnimation(fig, not_so_smart_animate, frames=nframes, repeat=True)
-anim.save('notsosmartclustering.gif', fps=fps, dpi=200)
+anim.save('notsosmartclustering.gif', fps=1, dpi=200)
 
 # uncomment these lines if running in a jupyter notebook
 # from IPython.display import HTML
