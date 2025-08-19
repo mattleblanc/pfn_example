@@ -3,7 +3,7 @@ that `ffmpeg` must be installed in order for matplotlib to be able to render
 the animation. Strange errors may result if there are issues with required
 software components.
 
-This version attempts to implement an even more generalized function for the animation, which would work for any array of jet events passed through.
+This version attempts to convert the general animation function (for any array of jet events passed through) from 'gen_ani_smart.py', but replacing the jet events with each step in any of the 3 jet declustering algorithms (KT, AKT, CA), which are plotted in 'fastjet-OnlyHistory-##.py'.
 """
 
 #           _   _ _____ __  __       _______ _____ ____  _   _
