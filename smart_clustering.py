@@ -86,11 +86,11 @@ def merge(ev0, ev1, R=1, lamb=0.5):
 #############################################################
 # ANIMATION OPTIONS
 #############################################################
-zf = 2           # size of points in scatter plot
+zf = 2           # size of points in scatter plot, originally 2
 lw = 1           # linewidth of flow lines
 fps = 60         # frames per second, increase this for sharper resolution
 nframes = 10*fps # total number of frames - originally 10*fps, but might need to change
-R = 0.5          # jet radius
+R = 0.4          # jet radius, originally 0.5
 
 #############################################################
 # GENERATE LEADING-ORDER EVENTS
@@ -99,10 +99,10 @@ n_events = 1
 particle_y_cut = 4.9 # cut on hadron rapidity
 particle_pt_cut = 0.5 # cut on hadron pT
 min_jet_pt = 50.0 # cut on jet pT
-## need to make R=0.4 jets with various algorithms:
-kt_jetdef  = fj.JetDefinition(fj.kt_algorithm,        0.4)
-akt_jetdef = fj.JetDefinition(fj.antikt_algorithm,    0.4)
-ca_jetdef  = fj.JetDefinition(fj.cambridge_algorithm, 0.4) # algorithm, R
+## need to make R=0.4 jets with various algorithms: (here R is above)
+kt_jetdef  = fj.JetDefinition(fj.kt_algorithm,        R)
+akt_jetdef = fj.JetDefinition(fj.antikt_algorithm,    R)
+ca_jetdef  = fj.JetDefinition(fj.cambridge_algorithm, R) # algorithm, R
 ## toggle through generations (???) - seven seems to give one where 3 algos produce marginally different leading jets
 pythia.next()
 pythia.next()
@@ -153,19 +153,18 @@ kt_jets  = fj.sorted_by_pt(kt_cluster.inclusive_jets(min_jet_pt))
 akt_jets = fj.sorted_by_pt(akt_cluster.inclusive_jets(min_jet_pt))
 ca_jets  = fj.sorted_by_pt(ca_cluster.inclusive_jets(min_jet_pt))
 print("Clustered with "+kt_jetdef.description())
-# print("The leading jet pT is: "+str(kt_jets[0].perp())+" GeV\n")
+print("The leading jet pT is: "+str(kt_jets[0].perp())+" GeV\n")
 print("Clustered with "+akt_jetdef.description())
-# print("The akt jet pT is: "+str(akt_jets[0].perp())+" GeV\n")
+print("The akt jet pT is: "+str(akt_jets[0].perp())+" GeV\n")
 print("Clustered with "+ca_jetdef.description())
-# print("The CA jet pT is: "+str(ca_jets[0].perp())+" GeV\n")
+print("The CA jet pT is: "+str(ca_jets[0].perp())+" GeV\n")
 
 #############################################################
 # CONSTITUENTS FOR THE LEADING JET, KT
 #############################################################
 print("kt jet info ... ");
-# print("idx\ty\t\tphi\t\tpt\t\tn constituents");
+print("idx\ty\t\tphi\t\tpt\t\tn constituents");
 ## print out the details for each jet
-
 for i in range(0,1):
     ## get the constituents of the jet
     constituents = fj.sorted_by_pt(kt_jets[i].constituents())
@@ -231,13 +230,10 @@ def cluster_history(algo):
     if algo == "kt":
         for j in range(0,len(kt_jets[0].constituents())):
             kt_xsubjs = kt_cluster.exclusive_subjets_up_to(kt_jets[0], j)
-            # print([[xsj.rap(), xsj.phi(), xsj.perp()] for xsj in kt_xsubjs])
             this_steps_plst = []
             for xsj in kt_xsubjs:
                 this_steps_plst.append([xsj.perp(), xsj.rap()-avg_rap, xsj.phi()-avg_phi])
-            # this_steps_plst = ([xsj.perp(), xsj.rap(), xsj.phi()] for xsj in kt_xsubjs)
-            print(this_steps_plst)
-
+            # print(this_steps_plst)
             hlst.append(this_steps_plst)
     elif algo == "akt":
         for j in range(0,len(akt_jets[0].constituents())):
@@ -264,6 +260,8 @@ def cluster_history(algo):
         print("not a valid algorithm")
     ## need to pop the first step off (empty array)
     hlst.pop(0)
+    ## reverse list to get from subjets to jet
+    hlst.reverse()
     ## copy events list to a numpy
     kfs = []
     for step in hlst:
@@ -274,22 +272,6 @@ kfs = cluster_history("kt")
 print("kfs arr:")
 print(kfs)
 
-## prepare the jets for any amount of events
-def prepare_events(keyframes):
-    kfs = []
-    ## center the jets by y, phi (elements 1-2 in particles list)
-    for event in keyframes:
-        event[:,1:3] -= np.average(event[:,1:3], weights=event[:,0], axis=0) 
-
-    ## mask out particles outside of the cone (radius R)
-    for event in keyframes:
-        event = event[np.linalg.norm(event[:,1:3], axis=1) < R]
-
-    ## copy events list to a numpy 
-    # global kfs
-    for ev in keyframes:
-        kfs.append(np.copy(ev))
-    return kfs
 
 #############################################################
 # CREATE DECLUSTERING HISTORY LIST
@@ -346,12 +328,11 @@ fig, ax = plt.subplots()
     
 merged = merge(kfs[0], kfs[1], lamb=0, R=R)
 
-# ## assign initial pts, ys, phis based on first keyframe
+## assign initial pts, ys, phis based on first keyframe
 pts0, ys0, phis0 = merged[:,0], merged[:,1], merged[:,2]
 
-# ## initialize scatterplot with first keyframe
+## initialize scatterplot with first keyframe
 scatter = ax.scatter(ys0, phis0, color='blue', s=pts0, lw=0)
-
 
 ## define the current phase which the smart_animate function uses
 current_phase = 0
@@ -379,6 +360,7 @@ def smart_animate(i):
         print('even phase')
         ev0 = kfs[current_kf]
         ev1 = kfs[current_kf]
+        # alpha = 1
 
     # odd phases are transitions between keyframes
     elif (current_phase % 2) == 1:
@@ -389,6 +371,7 @@ def smart_animate(i):
         else:
             ev0 = kfs[current_kf + 1]
             ev1 = kfs[current_kf]
+        # alpha = 0.5
 
     print('phase',current_phase)
     print('keyframe',current_kf)
@@ -399,15 +382,11 @@ def smart_animate(i):
         current_phase += 1
     
     color = 'blue' # change this later
+    alpha = 0.3
     
-    
-    # avg_rap = sum([c.rap() for c in constituents]) / len(constituents)
-    # avg_phi = sum([c.phi() for c in constituents]) / len(constituents)
-
-
     merged = merge(ev0, ev1, lamb=lamb, R=0.5)
     pts, ys, phis = merged[:,0], merged[:,1], merged[:,2]
-    scatter = ax.scatter(ys, phis, color=color, s=zf*pts, lw=0)
+    scatter = ax.scatter(ys, phis, color=color, s=zf*pts, alpha=alpha, lw=0)
 
     #     plt.scatter([xsj.rap()-avg_rap for xsj in kt_xsubjs],
     #                 [xsj.phi()-avg_phi for xsj in kt_xsubjs],
@@ -421,16 +400,18 @@ def smart_animate(i):
     #     plt.ylim(-0.4,0.4)
     #     plt.show()
 
+    # ax.set_xlim(-R, R); ax.set_ylim(-R, R);
+    ## limits are 0 to 2R i think
     ax.set_xlim(-R, R); ax.set_ylim(-R, R);
     ax.set_axis_off()
 
     return scatter,
 
 
-nframes = len(kt_jets[0].constituents()) - 1
+# nframes = len(kt_jets[0].constituents()) - 1
 
 anim = animation.FuncAnimation(fig, smart_animate, frames=nframes, repeat=True)
-anim.save('smartclustering.gif', fps=1, dpi=200)
+anim.save('smartclustering.gif', fps=fps, dpi=200)
 
 # uncomment these lines if running in a jupyter notebook
 # from IPython.display import HTML
