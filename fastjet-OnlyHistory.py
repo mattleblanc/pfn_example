@@ -31,8 +31,15 @@ kt_jetdef  = fj.JetDefinition(fj.kt_algorithm,        0.4)
 akt_jetdef = fj.JetDefinition(fj.antikt_algorithm,    0.4)
 ca_jetdef  = fj.JetDefinition(fj.cambridge_algorithm, 0.4) # algorithm, R
 
-# when running pythia in a notebook - do we need here?
-# pythia.next()
+# when running pythia in a notebook, abort the first generation
+# 7 pythia.next()s seem to give one where the 3 are marginally different. idk if this is correct??
+pythia.next()
+pythia.next()
+pythia.next()
+pythia.next()
+pythia.next()
+pythia.next()
+pythia.next()
 
 #############################################################
 # GENERATE LEADING-ORDER EVENTS
@@ -217,3 +224,24 @@ for i in range(0,1):
     plt.xlabel('Rapidity')
     plt.savefig('img-historytests/cah.jpg')
     plt.close()
+
+
+#############################################################
+# STUDY THE DECLUSTERING HISTORY, KT
+#############################################################
+zf=1
+for j in range(0,len(kt_jets[0].constituents())):
+    kt_xsubjs = kt_cluster.exclusive_subjets_up_to(kt_jets[0], j)
+    print([[xsj.rap(), xsj.phi(), xsj.perp()] for xsj in kt_xsubjs])
+
+    plt.scatter([xsj.rap()-avg_rap for xsj in kt_xsubjs],
+                [xsj.phi()-avg_phi for xsj in kt_xsubjs],
+                s=[xsj.perp()*zf for xsj in kt_xsubjs],
+                # lw=[xsj.perp()*zf for xsj in kt_xsubjs],
+                # s=[np.log(xsj.perp()) for xsj in kt_xsubjs],
+                color='red')
+    # plt.xlim(-4.5,4.5)
+    # plt.ylim(-np.pi,2*np.pi)
+    plt.xlim(-0.4,0.4)
+    plt.ylim(-0.4,0.4)
+    plt.savefig(f'img-historytests/ktframes/kt{j}.jpg')

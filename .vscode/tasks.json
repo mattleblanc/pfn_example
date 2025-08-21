@@ -1,0 +1,13 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"type": "npm",
+			"script": "lint",
+			"path": "tensorflow.venv/lib/python3.9/site-packages/matplotlib/backends/web_backend",
+			"problemMatcher": [],
+			"label": "npm: lint - tensorflow.venv/lib/python3.9/site-packages/matplotlib/backends/web_backend",
+			"detail": "npm run prettier && npm run eslint"
+		}
+	]
+}
