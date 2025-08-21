@@ -86,8 +86,8 @@ def merge(ev0, ev1, R=1, lamb=0.5):
 #############################################################
 # ANIMATION OPTIONS
 #############################################################
-zf = 2           # size of points in scatter plot, originally 2
-lw = 1           # linewidth of flow lines
+zf = 20           # size of points in scatter plot, originally 2
+lw = 0           # linewidth of flow lines, originally 1
 fps = 60         # frames per second, increase this for sharper resolution
 nframes = 10*fps # total number of frames - originally 10*fps, but might need to change
 R = 0.4          # jet radius, originally 0.5
@@ -183,22 +183,9 @@ for i in range(0,1):
 #############################################################
 # STUDY THE DECLUSTERING HISTORY, KT
 #############################################################
-# zf=1
 for j in range(0,len(kt_jets[0].constituents())):
     kt_xsubjs = kt_cluster.exclusive_subjets_up_to(kt_jets[0], j)
     print([[xsj.rap(), xsj.phi(), xsj.perp()] for xsj in kt_xsubjs])
-
-    # plt.scatter([xsj.rap()-avg_rap for xsj in kt_xsubjs],
-    #             [xsj.phi()-avg_phi for xsj in kt_xsubjs],
-    #             s=[xsj.perp()*zf for xsj in kt_xsubjs],
-    #             # lw=[xsj.perp()*zf for xsj in kt_xsubjs],
-    #             # s=[np.log(xsj.perp()) for xsj in kt_xsubjs],
-    #             color='red')
-    # # plt.xlim(-4.5,4.5)
-    # # plt.ylim(-np.pi,2*np.pi)
-    # plt.xlim(-0.4,0.4)
-    # plt.ylim(-0.4,0.4)
-    # plt.savefig(f'img-historytests/ktframes/kt{j}.jpg')
 
 #############################################################
 # LOAD IN JETS
@@ -222,7 +209,7 @@ for j in range(0,len(kt_jets[0].constituents())):
 
 # ev12123 = events.particles[12123][:,:3]
 
-## list of fastjet pseudojets?
+## create list of fastjet pseudojets
 kfs = []
 def cluster_history(algo):
     """algo:string of either kt, akt, or ca; returns a list of pseudojet events, each event being a step in the declustering history"""
@@ -233,7 +220,6 @@ def cluster_history(algo):
             this_steps_plst = []
             for xsj in kt_xsubjs:
                 this_steps_plst.append([xsj.perp(), xsj.rap()-avg_rap, xsj.phi()-avg_phi])
-            # print(this_steps_plst)
             hlst.append(this_steps_plst)
     elif algo == "akt":
         for j in range(0,len(akt_jets[0].constituents())):
@@ -323,8 +309,10 @@ print(kfs)
 #############################################################
 # MAKE ANIMATION
 #############################################################
-
+## animation settings
 fig, ax = plt.subplots()
+color = 'red'
+alpha = 0.3
     
 merged = merge(kfs[0], kfs[1], lamb=0, R=R)
 
@@ -332,37 +320,32 @@ merged = merge(kfs[0], kfs[1], lamb=0, R=R)
 pts0, ys0, phis0 = merged[:,0], merged[:,1], merged[:,2]
 
 ## initialize scatterplot with first keyframe
-scatter = ax.scatter(ys0, phis0, color='blue', s=pts0, lw=0)
+scatter = ax.scatter(ys0, phis0, color='blue', s=pts0, lw=lw)
 
 ## define the current phase which the smart_animate function uses
 current_phase = 0
 
 ## smart animate function, which is called sequentially
 def smart_animate(i):
-    # clear ax before each frame drawing
+    ## clear ax before each frame drawing
     ax.clear()
-
-    # need 2 times the number of keyframes for transition stages
+    ## need 2 times the number of keyframes for transition stages
     nstages = 2 * len(kfs)
-
-    # stage number based on frames
+    ## stage number based on frames
     stage_size = (nframes / nstages)
-
-    # current keyframe number
+    ## current keyframe number
     global current_phase
     current_kf = int(np.floor(current_phase/2))
-
-    # assuming i starts indexing at 0,
+    ## assuming i starts indexing at 0,
     lamb = (nstages*(i - (current_phase * stage_size))) / (nframes-1)
 
-    # even phases are the static images of keyframes
+    ## even phases are the static images of keyframes
     if (current_phase % 2) == 0:
         print('even phase')
         ev0 = kfs[current_kf]
         ev1 = kfs[current_kf]
-        # alpha = 1
-
-    # odd phases are transitions between keyframes
+        # alpha = 0.2
+    ## odd phases are transitions between keyframes
     elif (current_phase % 2) == 1:
         print('odd phase')
         if current_phase == (nstages - 1):
@@ -371,22 +354,19 @@ def smart_animate(i):
         else:
             ev0 = kfs[current_kf + 1]
             ev1 = kfs[current_kf]
-        # alpha = 0.5
-
+        # alpha = 1
+    ## confirm phases and frames
     print('phase',current_phase)
     print('keyframe',current_kf)
     print('frame',i)
-
-    # set modulo to recognize when the phase ends
+    ## set modulo to recognize when the phase ends
     if ((i+1) % stage_size) < 1: # not == due to non-integer stage_size
         current_phase += 1
-    
-    color = 'blue' # change this later
-    alpha = 0.3
-    
+
+    ## interpolate and scatter!
     merged = merge(ev0, ev1, lamb=lamb, R=0.5)
     pts, ys, phis = merged[:,0], merged[:,1], merged[:,2]
-    scatter = ax.scatter(ys, phis, color=color, s=zf*pts, alpha=alpha, lw=0)
+    scatter = ax.scatter(ys, phis, color=color, s=zf*np.log(pts), alpha=alpha, lw=lw)
 
     #     plt.scatter([xsj.rap()-avg_rap for xsj in kt_xsubjs],
     #                 [xsj.phi()-avg_phi for xsj in kt_xsubjs],
@@ -400,10 +380,10 @@ def smart_animate(i):
     #     plt.ylim(-0.4,0.4)
     #     plt.show()
 
+    ## fix limits somehow ???
     # ax.set_xlim(-R, R); ax.set_ylim(-R, R);
-    ## limits are 0 to 2R i think
-    ax.set_xlim(-R, R); ax.set_ylim(-R, R);
-    ax.set_axis_off()
+    ax.set_xlim(-R-.1, R+.1); ax.set_ylim(-R-.1, R+.1);
+    # ax.set_axis_off()
 
     return scatter,
 
