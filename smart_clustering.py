@@ -165,36 +165,21 @@ print("Clustered with "+ca_jetdef.description())
 print("kt jet info ... ");
 # print("idx\ty\t\tphi\t\tpt\t\tn constituents");
 ## print out the details for each jet
+
 for i in range(0,1):
     ## get the constituents of the jet
     constituents = fj.sorted_by_pt(kt_jets[i].constituents())
-    # print(i,"\t",
-    #       "%0.4f"%kt_jets[i].rap(), "\t",
-    #       "%0.4f"%kt_jets[i].phi(),"\t",
-    #       "%0.4f"%kt_jets[i].perp(),"\t",
-    #       len(constituents))
-    # print("\nConstituent info:       ");
     for j in range(0,len(constituents)) :
         print(j,"\t",
               "%0.4f"%constituents[j].rap(),"\t",
               "%0.4f"%constituents[j].phi(),"\t",
               "%0.4f"%constituents[j].perp(),"\t",
              );
-    ## plot the constituents
-    # zf = 2
-    # avg_rap = sum([c.rap() for c in constituents]) / len(constituents)
-    # avg_phi = sum([c.phi() for c in constituents]) / len(constituents)
-    # plt.scatter([c.rap()-avg_rap for c in constituents],
-    #             [c.phi()-avg_phi for c in constituents],
-    #             s=[c.perp()*zf for c in constituents],
-    #             # s=[np.log(c.perp())*zf for c in constituents],
-    #             color='red')
-    # plt.xlim(-0.4,0.4)
-    # plt.ylim(-0.4,0.4)
-    # plt.ylabel('Azimuth')
-    # plt.xlabel('Rapidity')
-    # plt.savefig('img-smartcluster/kt.jpg')
-    # plt.close()
+    ## prepare for later plotting
+    global avg_rap
+    global avg_phi
+    avg_rap = sum([c.rap() for c in constituents]) / len(constituents)
+    avg_phi = sum([c.phi() for c in constituents]) / len(constituents)
 
 #############################################################
 # STUDY THE DECLUSTERING HISTORY, KT
@@ -239,7 +224,6 @@ for j in range(0,len(kt_jets[0].constituents())):
 # ev12123 = events.particles[12123][:,:3]
 
 ## list of fastjet pseudojets?
-# kt_xsubjs_7 = []
 kfs = []
 def cluster_history(algo):
     """algo:string of either kt, akt, or ca; returns a list of pseudojet events, each event being a step in the declustering history"""
@@ -250,7 +234,7 @@ def cluster_history(algo):
             # print([[xsj.rap(), xsj.phi(), xsj.perp()] for xsj in kt_xsubjs])
             this_steps_plst = []
             for xsj in kt_xsubjs:
-                this_steps_plst.append([xsj.perp(), xsj.rap(), xsj.phi()])
+                this_steps_plst.append([xsj.perp(), xsj.rap()-avg_rap, xsj.phi()-avg_phi])
             # this_steps_plst = ([xsj.perp(), xsj.rap(), xsj.phi()] for xsj in kt_xsubjs)
             print(this_steps_plst)
 
@@ -416,19 +400,14 @@ def smart_animate(i):
     
     color = 'blue' # change this later
     
+    
+    # avg_rap = sum([c.rap() for c in constituents]) / len(constituents)
+    # avg_phi = sum([c.phi() for c in constituents]) / len(constituents)
+
 
     merged = merge(ev0, ev1, lamb=lamb, R=0.5)
     pts, ys, phis = merged[:,0], merged[:,1], merged[:,2]
     scatter = ax.scatter(ys, phis, color=color, s=zf*pts, lw=0)
-
-    # for j in range(0,len(kt_jets[0].constituents())):
-    #     constituents = kt_jets[0].constituents()
-
-    #     kt_xsubjs = kt_cluster.exclusive_subjets_up_to(kt_jets[0], j)
-    #     print([[xsj.rap(), xsj.phi(), xsj.perp()] for xsj in kt_xsubjs])
-
-    #     avg_rap = sum([c.rap() for c in constituents]) / len(constituents)
-    #     avg_phi = sum([c.phi() for c in constituents]) / len(constituents)
 
     #     plt.scatter([xsj.rap()-avg_rap for xsj in kt_xsubjs],
     #                 [xsj.phi()-avg_phi for xsj in kt_xsubjs],
@@ -448,58 +427,7 @@ def smart_animate(i):
     return scatter,
 
 
-## not so smart animate function. ignores the optimal transport frames
-
-
-
-
-# kfs = kt_xsubjs
 nframes = len(kt_jets[0].constituents()) - 1
-
-
-def not_so_smart_animate(i):
-    # clear ax before each frame drawing
-    ax.clear()
-
-    # only need 1 times the number of keyframes (no transition stages)
-    # nstages = len(kfs)
-
-    # stage number based on frames
-    # stage_size = (nframes / nstages) ## this should just be 1?
-
-    # current keyframe number
-    # global current_phase
-    # current_kf = int(np.floor(current_phase/2))
-
-    # assuming i starts indexing at 0,
-    # lamb = (nstages*(i - (current_phase * stage_size))) / (nframes-1)
-
-    # even phases are the static images of keyframes
-    # ev0 = kfs[current_kf]
-    # ev1 = kfs[current_kf]
-
-    # odd phases are also static images of keyframes
-
-    # print('phase',current_phase)
-    # print('keyframe',current_kf)
-    # print('frame',i)
-    
-    color = 'blue' # change this later
-    
-    # merged = merge(ev0, ev1, lamb=lamb, R=0.5)
-    # pts, ys, phis = merged[:,0], merged[:,1], merged[:,2]
-    # scatter = ax.scatter(ys, phis, color=color, s=zf*pts, lw=0)
-    kt_xsubjs = kt_cluster.exclusive_subjets_up_to(kt_jets[0], j)
-
-    scatter = ax.scatter([kt_xsubjs[i].rap()-avg_rap],
-                     [kt_xsubjs[i].phi()-avg_phi],
-                     s=[kt_xsubjs[i].perp()*zf],
-                     color='purple')
-
-    ax.set_xlim(-5, 5); ax.set_ylim(-5, 5);
-    ax.set_axis_off()
-
-    return scatter,
 
 anim = animation.FuncAnimation(fig, smart_animate, frames=nframes, repeat=True)
 anim.save('smartclustering.gif', fps=1, dpi=200)
