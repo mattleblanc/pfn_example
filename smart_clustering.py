@@ -97,7 +97,7 @@ R = 0.4          # jet radius, originally 0.5
 #############################################################
 n_events = 1
 particle_y_cut = 4.9 # cut on hadron rapidity
-particle_pt_cut = 0.5 # cut on hadron pT
+particle_pt_cut = 2.0 # cut on hadron pT, originally 0.5
 min_jet_pt = 50.0 # cut on jet pT
 ## need to make R=0.4 jets with various algorithms: (here R is above)
 kt_jetdef  = fj.JetDefinition(fj.kt_algorithm,        R)
@@ -224,8 +224,12 @@ def cluster_history(algo):
     elif algo == "akt":
         for j in range(0,len(akt_jets[0].constituents())):
             akt_xsubjs = akt_cluster.exclusive_subjets_up_to(akt_jets[0], j)
+            this_steps_plst = []
+            for xsj in akt_xsubjs:
+                this_steps_plst.append([xsj.perp(), xsj.rap()-avg_rap, xsj.phi()-avg_phi])
+            hlst.append(this_steps_plst)
+            color = 'green'
             # print([[xsj.rap(), xsj.phi(), xsj.perp()] for xsj in akt_xsubjs])
-
     elif algo == "ca":
         for j in range(0,len(ca_jets[0].constituents())):
             ca_xsubjs = ca_cluster.exclusive_subjets_up_to(ca_jets[0], j)
@@ -254,9 +258,11 @@ def cluster_history(algo):
         kfs.append(np.copy(step))
     return kfs
 
-kfs = cluster_history("kt")
-print("kfs arr:")
-print(kfs)
+# kfs = cluster_history("kt")
+# print("kfs arr:")
+# print(kfs)
+
+kfs = cluster_history("akt")
 
 
 #############################################################
@@ -311,7 +317,8 @@ print(kfs)
 #############################################################
 ## animation settings
 fig, ax = plt.subplots()
-color = 'red'
+# color = 'red'
+color = 'green'
 alpha = 0.3
     
 merged = merge(kfs[0], kfs[1], lamb=0, R=R)
